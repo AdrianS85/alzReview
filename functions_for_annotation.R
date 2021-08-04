@@ -1792,4 +1792,3 @@ select_best_geneName <- function(char_vec, regex_to_detect_bad_names_with = '(\\
   
   return(the_best_name)
 }
-### !!! added 280421
