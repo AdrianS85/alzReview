@@ -163,6 +163,8 @@ alz$inputAlzData$input <- list(
 alz$inputAlzData$input$qa$data_for_probe_annotation <- verify_df(df_ = alz$inputAlzData$input[['data_for_probe_annotation']], only_qa = T)
 alz$inputAlzData$input$qa$data_NOT_for_probe_annotation <- verify_df(df_ = alz$inputAlzData$input[['data_NOT_for_probe_annotation']], only_qa = T)
 
+### !!! Beware - ensembl annotations for exp 22 GPL5188 are quite different from original Noori annotations. Not sure why, but I've double checked it with ensembl, and with GEO and mine seem good
+
 ### IDENTIFY PLATFORM FOR PROBE ANNOTATION ###
 ##############################################
 
@@ -313,6 +315,186 @@ alz$alzData$toUseWholeNb <- subset(alz$alzData$toUseWholeNb, alz$alzData$toUseWh
 
 
 
+
+
+
+####################################
+### ADD TISSUE-SPECIFIC ANALYSIS ###
+
+#########################
+### PREPARE SUBGROUPS ###
+#########################
+# alz$inputAlzData$subgroups$categorical_col_to_analyze <- c("tissue", 'tissueGroup')
+# 
+# 
+# 
+# alz$inputAlzData$subgroups$data <- purrr::map(
+#   .x = alz$inputAlzData$subgroups$categorical_col_to_analyze, 
+#   .f = function(column_name){
+#     column <- alz$inputAlzData$preFullDesc[[column_name]]
+#     
+#     value_types <- unique(column)
+#     value_types <- value_types[!is.na(value_types)]
+#     
+#     experiments_to_subset <- purrr::map(
+#       .x = value_types,
+#       .f = function(value_type)
+#       {
+#         logic_desc_for_value_type <- alz$inputAlzData$preFullDesc[[column_name]] == value_type
+#         
+#         desc_for_value_type <- subset(
+#           x = alz$inputAlzData$preFullDesc,
+#           subset = logic_desc_for_value_type,
+#           select = c("exp_comp", column_name))
+#         
+#         logic_work_dataset_ <- alz[["inputAlzData"]][["toUseWhole"]][["work_dataset"]][["exp_comp"]] %in% desc_for_value_type[["exp_comp"]]
+#         
+#         work_dataset_ <- subset(
+#           x = alz[["inputAlzData"]][["toUseWhole"]][['work_dataset']], 
+#           subset = logic_work_dataset_)
+#         
+#         if (!bazar::is.empty(work_dataset_)) {
+#           whole_dataset <- get_spread_data_and_entries_with_n_or_more_values_per_exp(
+#             dataset_ = work_dataset_, 
+#             spread_key = "exp_comp", 
+#             spread_value = 'logFC_median', 
+#             n_ = 3, 
+#             dataset_name = "none",
+#             extract_exp_from_exp_and_comp_ = '__',
+#             gene_name_col_ = "Symbol",
+#             dir_ = "no",
+#             inside_dir_name = 'datasets',
+#             save = F
+#           )
+#           
+#           return(whole_dataset)
+#         } else return(NA)
+#       })
+#     
+#     names(experiments_to_subset) <- value_types
+#     
+#     return(experiments_to_subset)
+#   })
+# 
+# names(alz$inputAlzData$subgroups$data) <- alz$inputAlzData$subgroups$categorical_col_to_analyze
+# 
+# 
+# 
+# alz$inputAlzData$subgroups$dataset_types <- c("work_dataset", "spread_work_dataset", "work_dataset_3_exps_up", "spread_work_dataset_3_exps_up")
+# 
+# alz$inputAlzData$subgroups$all_sets_of_datasets <- purrr::map(
+#   .x = alz$inputAlzData$subgroups$dataset_types, 
+#   .f = function(set_of_datasets)
+#   {
+#     list_ <- get_dataset_sets_wrapper(
+#       subgroups_ = alz$inputAlzData$subgroups$data, 
+#       dataset_set_name = set_of_datasets,
+#       whole_dataset = alz[["inputAlzData"]][["toUseWhole"]][["work_dataset"]]) ###
+#     
+#     list_$whole_dataset <- NULL
+#     
+#     return(list_)
+#   })
+# 
+# names(alz$inputAlzData$subgroups$all_sets_of_datasets) <- alz$inputAlzData$subgroups$dataset_types
+# 
+# 
+# 
+# alz$inputAlzData$subgroups$percentage_analysis <- purrr::map2(
+#   .x = alz$inputAlzData$subgroups$all_sets_of_datasets[['spread_work_dataset']],
+#   .y = names(alz$inputAlzData$subgroups$all_sets_of_datasets[['spread_work_dataset']]),
+#   .f = function(dataset, name) {
+#     
+#     done <- F
+#     counter <- 0
+#     
+#     while (done == F) {
+#       message(paste0(name, ': ', counter))
+#       
+#       tryCatch( {
+#         return_ <- get_number_and_percentage_of_directionality_of_exp_and_comp_first_column_names(
+#           spread_df_ = dataset,
+#           name_of_df_ = name,
+#           gene_col = "Symbol",
+#           dir_ = "xxx",
+#           inside_dir_name = 'xxx',
+#           exp_col = "exp_comp",
+#           logfc_col = 'logFC_median',
+#           pattern_to_extract_exp_from_exp_and_comp_ = '__.*')
+#         
+#         done <- T
+#         
+#         counter = counter + 1
+#         
+#         Sys.sleep(5)
+#       },
+#       error=function(e) {
+#         Sys.sleep(5)
+#         warning('something went wrong, trying again in 5 s')
+#       })
+#     }
+#     
+#   
+#     return_$pTotal <- NA
+#     return_$pUp <- NA
+#     return_$ranking <- NA
+#     
+#     for (rowNb in seq_along(return_[[1]])) {
+#       return_$pTotal[[rowNb]] <- binom.test(
+#         x = return_$no_of_comps[[rowNb]], 
+#         n = length( colnames(dataset) ) - 1,
+#         p = 0.05, 
+#         alternative = "greater")$p.value
+#       
+#       return_$pUp[[rowNb]] <- binom.test(
+#         x = as.integer(return_$no_of_comps[[rowNb]] * (return_$perc_of_upregulated[[rowNb]] / 100)), 
+#         n = return_$no_of_comps[[rowNb]],
+#         p = 0.5, 
+#         alternative = "two.sided")$p.value
+#       
+#       return_$ranking[[rowNb]] <- ifelse(
+#         test = return_$perc_of_upregulated[[rowNb]] >= 50, 
+#         yes = (return_$perc_of_upregulated[[rowNb]] * return_$number_of_exp[[rowNb]]) / 100, 
+#         no = ( (100 - return_$perc_of_upregulated[[rowNb]]) * return_$number_of_exp[[rowNb]] ) / 100
+#       )
+#       
+#     }
+#     
+#     return_$padjTotal <- p.adjust(p = return_$pTotal, method = "bonferroni")
+#     return_$padjUp <- p.adjust(p = return_$pUp, method = "bonferroni")
+#     
+#     
+#     return_ <- subset(return_, return_$pTotal < 0.05)
+# 
+#     return(return_)
+#   })
+
+
+
+
+
+#########################
+### PREPARE SUBGROUPS ###
+#########################
+
+### ADD TISSUE-SPECIFIC ANALYSIS ###
+####################################
+
+
+# alz$alzData <- rlist::list.insert(rlist::list.clean(.data = alz$inputAlzData$subgroups$percentage_analysis, fun = function(x) {length(x[[1]]) == 0}), 1, "toUseWholeNb" = alz$alzData$toUseWholeNb)
+
+
+# alz$inputAlzData$toUseForClustFull <- alz[["inputAlzData"]][["toUseWhole"]][["spread_work_dataset_3_exps_up"]]
+# 
+# alz$inputAlzData$toUseForClustFull[is.na(alz$inputAlzData$toUseForClustFull)] <- 0
+# 
+# readr::write_tsv(x = alz$inputAlzData$toUseForClustFull, file = "toUseForClustFull.tsv")
+# 
+# readr::write_tsv(x = alz$inputAlzData$toUseForClust[1:10,], file = "for_clustering_test.tsv")
+
+# Nie, bo tu już mamy odsiane wyniki, więc na wstępie fdr jest przekłamane
+# alz$alzData$toUseWholeNb$padjTotal <- p.adjust(p = alz$alzData$toUseWholeNb$pTotal, method = "fdr")
+# alz$alzData$toUseWholeNb$padjUp <- p.adjust(p = alz$alzData$toUseWholeNb$pUp, method = "fdr")
 ### ALZHEIMER DATASETS ###
 ##########################
 
@@ -570,7 +752,7 @@ alz$updates$gc$GSE132423$output <- subset(
 #################
 ### GSE128148 ###
 
-alz$updates$gc$GSE128148$input <- readr::read_tsv("data/GSE128148_dea_veh_cort.tsv")
+alz$updates$gc$GSE128148$input <- readr::read_tsv("data/GSE128148_dea_veh_cort_2.tsv")
 
 alz$updates$gc$GSE128148$input$dummy_exp <- as.numeric(1)
 
@@ -604,13 +786,52 @@ alz$updates$gc$GSE128148$output <- dplyr::select(.data = alz$updates$gc$GSE12814
 #################
 
 
+#################
+### GSE128148_4 ###
+
+alz$updates$gc$GSE128148_4$input <- readr::read_tsv("data/GSE128148_dea_veh_cort_4.tsv")
+
+alz$updates$gc$GSE128148_4$input$dummy_exp <- as.numeric(1)
+
+alz$updates$gc$GSE128148_4$identifers$annotations <- master_annotator(
+  descriptions_df = data.frame("Species" = "mus", "dummy_exp" = 1),
+  exp_id_col = "dummy_exp",
+  des_species_col = "Species",
+  input_df = alz$updates$gc$GSE128148_4$input,
+  input_id_col = "genes",
+  PERFORM_C_annotation = T,
+  C_legacy_D_str_identifier_type__ = "ensembl_gene_id",
+  A_D_C_string_separator__ = ', ')
+
+alz$updates$gc$GSE128148_4$identifers$annotations$Symbol <- ifelse(
+  test = is.na(alz$updates$gc$GSE128148_4$identifers$annotations$external_gene_name), 
+  yes = tolower(alz$updates$gc$GSE128148_4$identifers$annotations$genes), 
+  no = alz$updates$gc$GSE128148_4$identifers$annotations$external_gene_name)
+
+alz$updates$gc$GSE128148_4$output <- subset(
+  x = alz$updates$gc$GSE128148_4$identifers$annotations, 
+  subset = alz$updates$gc$GSE128148_4$identifers$annotations$PValue < 0.05)
+
+alz$updates$gc$GSE128148_4$output$GSE12_4Dir <- ifelse(
+  test = alz$updates$gc$GSE128148_4$output$logFC > 0, 
+  yes = "up", 
+  no = "down")
+
+alz$updates$gc$GSE128148_4$output <- dplyr::select(.data = alz$updates$gc$GSE128148_4$output, Symbol, GSE12_4Dir)
+
+### GSE128148_4 ###
+#################
+
+
+
 ### We are using all.x = T here, because if given gene was not found in original analysis, than it will have at most 3 hits, and that is not enough to be of interest
 alz$updates$gc$merged <- purrr::reduce(
   .x = list(
     alz[["inputCompData"]][["gc"]], 
     alz$updates$gc$dvv$output, 
     alz$updates$gc$GSE132423$output, 
-    alz$updates$gc$GSE128148$output), 
+    alz$updates$gc$GSE128148$output,
+    alz$updates$gc$GSE128148_4$output), 
   .f = merge, 
   by = "Symbol",
   all.x = T)
@@ -618,16 +839,16 @@ alz$updates$gc$merged <- purrr::reduce(
 for (rowNb in seq_along(alz$updates$gc$merged[[1]])) {
   
   alz$updates$gc$merged$updatedTotal[[rowNb]] <- sum(
-    !is.na( c(alz$updates$gc$merged$dvvDir[[rowNb]], alz$updates$gc$merged$GSE13Dir[[rowNb]], alz$updates$gc$merged$GSE12Dir[[rowNb]]) )
+    !is.na( c(alz$updates$gc$merged$dvvDir[[rowNb]], alz$updates$gc$merged$GSE13Dir[[rowNb]], alz$updates$gc$merged$GSE12Dir[[rowNb]], alz$updates$gc$merged$GSE12_4Dir[[rowNb]]) )
   )
   
   alz$updates$gc$merged$updatedUp[[rowNb]] <- sum(
-    c(alz$updates$gc$merged$dvvDir[[rowNb]] == "up", alz$updates$gc$merged$GSE13Dir[[rowNb]] == "up", alz$updates$gc$merged$GSE12Dir[[rowNb]] == "up"),
+    c(alz$updates$gc$merged$dvvDir[[rowNb]] == "up", alz$updates$gc$merged$GSE13Dir[[rowNb]] == "up", alz$updates$gc$merged$GSE12Dir[[rowNb]] == "up", alz$updates$gc$merged$GSE12_4Dir[[rowNb]] == "up"),
     na.rm = T
   )
   
   alz$updates$gc$merged$updatedDown[[rowNb]] <- sum(
-    c(alz$updates$gc$merged$dvvDir[[rowNb]] == "down", alz$updates$gc$merged$GSE13Dir[[rowNb]] == "down", alz$updates$gc$merged$GSE12Dir[[rowNb]] == "down"),
+    c(alz$updates$gc$merged$dvvDir[[rowNb]] == "down", alz$updates$gc$merged$GSE13Dir[[rowNb]] == "down", alz$updates$gc$merged$GSE12Dir[[rowNb]] == "down", alz$updates$gc$merged$GSE12_4Dir[[rowNb]] == "down"),
     na.rm = T
   )
 }
@@ -696,10 +917,10 @@ for (rowNb in seq_along(alz$compData$gc[[1]])) {
     p = 0.5, 
     alternative = "two.sided")$p.value
   
-  alz$compData$gc$gc_ranking[[rowNb]] <- ifelse(
-    test = alz$compData$gc$gc_up[[rowNb]] >= 50, 
-    yes = (alz$compData$gc$gc_up[[rowNb]] * alz$compData$gc$gc_totalPubs[[rowNb]]) / 100, 
-    no = ( (100 - alz$compData$gc$gc_up[[rowNb]]) * alz$compData$gc$gc_totalPubs[[rowNb]] ) / 100 )
+  # alz$compData$gc$gc_ranking[[rowNb]] <- ifelse(
+  #   test = alz$compData$gc$gc_up[[rowNb]] >= 50, 
+  #   yes = (alz$compData$gc$gc_up[[rowNb]] * alz$compData$gc$gc_totalPubs[[rowNb]]) / 100, 
+  #   no = ( (100 - alz$compData$gc$gc_up[[rowNb]]) * alz$compData$gc$gc_totalPubs[[rowNb]] ) / 100 )
 }
 
 ### UPDATE GC DATA ###
@@ -707,6 +928,179 @@ for (rowNb in seq_along(alz$compData$gc[[1]])) {
 
 ### GC DATA ###
 ###############
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#######################
+### COMPARISON DATA ###
+
+# alz$inputCompData$stress <- openxlsx::read.xlsx(xlsxFile = "data/stress.xlsx", sheet = "all")
+# 
+# alz$compData$stress <- dplyr::select(.data = alz$inputCompData$stress, Symbol = lower_final_gene_name, stressExps = no_of_exps, stressUp = perc_of_upregulated)
+# 
+# alz$compData$stress$stress_pTotal <- as.numeric(NA)
+# alz$compData$stress$stress_pUp <- as.numeric(NA)
+# 
+# for (rowNb in seq_along(alz$compData$stress[[1]])) {
+#   alz$compData$stress$stress_pTotal[[rowNb]] <- binom.test(
+#     x = alz$compData$stress$stressExps[[rowNb]], 
+#     n = 224,
+#     p = 0.05, 
+#     alternative = "greater")$p.value
+#   
+#   alz$compData$stress$stress_pUp[[rowNb]] <- binom.test(
+#     x = as.integer(alz$compData$stress$stressExps[[rowNb]] * (alz$compData$stress$stressUp[[rowNb]])), 
+#     n = alz$compData$stress$stressExps[[rowNb]],
+#     p = 0.5, 
+#     alternative = "two.sided")$p.value
+# }
+# 
+# alz$compData$stress <- subset(alz$compData$stress, subset = alz$compData$stress$stress_pTotal < 0.05)
+# 
+# 
+# 
+# 
+# alz$inputCompData$aDep <- read.delim("data/exp_and_comp_nb_and_perc_whole_dataset.tsv", dec = ",")
+# 
+# alz$compData$aDep <- dplyr::select(.data = alz$inputCompData$aDep, Symbol = external_gene_name, aDepExps = no_of_comps, aDepUp = perc_of_upregulated)
+# 
+# alz$compData$aDep$aDep_pTotal <- as.numeric(NA)
+# alz$compData$aDep$aDep_pUp <- as.numeric(NA)
+# 
+# alz$compData$aDep$aDepUp <- alz$compData$aDep$aDepUp / 100
+# 
+# for (rowNb in seq_along(alz$compData$aDep[[1]])) {
+#   alz$compData$aDep$aDep_pTotal[[rowNb]] <- binom.test(
+#     x = alz$compData$aDep$aDepExps[[rowNb]], 
+#     n = 176,
+#     p = 0.05, 
+#     alternative = "greater")$p.value
+#   
+#   alz$compData$aDep$aDep_pUp[[rowNb]] <- binom.test(
+#     x = as.integer(alz$compData$aDep$aDepExps[[rowNb]] * alz$compData$aDep$aDepUp[[rowNb]]), 
+#     n = alz$compData$aDep$aDepExps[[rowNb]],
+#     p = 0.5, 
+#     alternative = "two.sided")$p.value
+# }
+# 
+# alz$compData$aDep <- subset(alz$compData$aDep, subset = alz$compData$aDep$aDep_pTotal < 0.05)
+# 
+# 
+# 
+# 
+# 
+# 
+# alz$inputCompData$prot <- read.delim("data/Genetic Variability in Molecular Pathways Implicated in Alzheimer's Disease.tsv")
+# 
+# alz$compData$prot <- alz$inputCompData$prot
+# 
+# alz$compData$prot$Symbol <- tolower(alz$compData$prot$Symbol) ### All gene names are official symbols
+# 
+# 
+# 
+# 
+# 
+# 
+# alz$inputCompData$age1 <- openxlsx::read.xlsx("data/Meta-analysis of human prefrontal cortex reveals activation of GFAP and decline of synaptic transmission in the aging brain.xlsx", sheet = "age_correlation_M_F")
+# 
+# alz$compData$age1 <- alz$inputCompData$age1
+# 
+# alz$compData$age1$Symbol <- tolower(alz$compData$age1$symbol_M)
+# 
+# alz$compData$age1$age1_mCor <- alz$compData$age1[[5]]
+# alz$compData$age1$age1_fCor <- alz$compData$age1[[10]]
+# 
+# alz$compData$age1$age1_mCorP <- alz$compData$age1[[2]]
+# alz$compData$age1$age1_fCorP <- alz$compData$age1[[7]]
+# 
+# alz$compData$age1$age1_mCorPadj <- alz$compData$age1[[3]]
+# alz$compData$age1$age1_fCorPadj <- alz$compData$age1[[8]]
+# 
+# alz$compData$age1_M <- dplyr::select(.data = alz$compData$age1, Symbol, dplyr::contains(match = "mCor", ignore.case = F))
+# 
+# alz$compData$age1_F <- dplyr::select(.data = alz$compData$age1, Symbol, dplyr::contains(match = "fCor", ignore.case = F))
+# 
+# alz$compData$age1_M <- subset(alz$compData$age1_M, subset = alz$compData$age1_M$age1_mCorP < 0.05 & abs(alz$compData$age1_M$age1_mCor) > 0.3)
+# 
+# alz$compData$age1_F <- subset(alz$compData$age1_F, subset = alz$compData$age1_F$age1_fCorP < 0.05 & abs(alz$compData$age1_F$age1_fCor) > 0.3)
+# 
+# alz$compData$age1 <- NULL
+# 
+# 
+# 
+# 
+# 
+# 
+# alz$inputCompData$age2 <- openxlsx::read.xlsx("data/Re-exploring the core genes and modules in the human frontal cortex during chronological aging insights from network-based analysis of transcriptomic studies.xlsx", startRow = 4)
+# 
+# alz$compData$age2 <- alz$inputCompData$age2
+# 
+# alz$compData$age2 <- dplyr::select(alz$compData$age2, Symbol = Name, age2_comEs = CombinedES)
+# 
+# alz$compData$age2$Symbol <- tolower(alz$compData$age2$Symbol)
+# 
+# 
+# 
+# 
+# 
+# alz$inputCompData$isch <- read.delim("data/isch.tsv")
+# 
+# alz$compData$isch <- alz$inputCompData$isch
+# 
+# alz$compData$isch$Symbol <- tolower(alz$compData$isch$Symbol)
+
+### COMPARISON DATA ###
+#######################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -781,7 +1175,15 @@ alz$other$enrich <- purrr::map2(
     all <- dplyr::select(.data = dataset, Symbol)
     readr::write_tsv(x = all, file = paste0(dir, name, ".txt"))
     
-    return_ <- list("all" = all)
+    up <- dplyr::filter(.data = dataset, dataset$perc_of_upregulated > 50 & dataset$pUp < 0.1) %>%
+      dplyr::select(Symbol)
+    readr::write_tsv(x = up, file = paste0(dir, name, "_up.txt"))
+    
+    down <- dplyr::filter(.data = dataset, dataset$perc_of_upregulated < 50 & dataset$pUp < 0.1) %>%
+      dplyr::select(Symbol)
+    readr::write_tsv(x = down, file = paste0(dir, name, "_down.txt"))
+    
+    return_ <- list("all" = all, "up" = up, "down" = down)
     
     return_ <- rlist::list.clean(.data = return_, fun = function(x){length(x[[1]]) == 0})
 
@@ -796,7 +1198,39 @@ alz$other$enrich <- purrr::map2(
 
 
 
+##################################
+### GET ONLY GC+ALZ CLUSTERING ###
 
+alz$other$gcAndAlzClust$input <- alz[["inputAlzData"]][["toUseWhole"]][["spread_work_dataset_3_exps_up"]]
+
+alz$other$gcAndAlzClust$input <- subset(x = alz$other$gcAndAlzClust$input, subset = alz$other$gcAndAlzClust$input$Symbol %in% alz[["compData"]][["gc"]]$Symbol)
+
+alz$other$gcAndAlzClust$input[is.na(alz$other$gcAndAlzClust$input)] <- 0
+
+readr::write_tsv(x = alz$other$gcAndAlzClust$input, file = "clust/gcAndAlzClust.tsv")
+
+# cluster -f gcAndAlzClust.tsv -m a -g 4 -e 4 
+
+
+
+alz$other$gcAndAlzClust$subgroups$input <- alz[["inputAlzData"]][["subgroups"]][["all_sets_of_datasets"]][["spread_work_dataset_3_exps_up"]]
+
+alz$other$gcAndAlzClust$subgroups$input <- purrr::map2(
+  .x = alz$other$gcAndAlzClust$subgroups$input, 
+  .y = names(alz$other$gcAndAlzClust$subgroups$input),
+  .f = function(dataset, name){
+  
+    dataset_ <- subset(x = dataset, subset = dataset$Symbol %in% alz[["compData"]][["gc"]]$Symbol)
+    
+    dataset_[is.na(dataset_)] <- 0
+    
+    readr::write_tsv(x = dataset_, file = paste0("clust/subgroups/", name, "_gcAndAlzClust.tsv"))
+})
+
+# ls *.tsv | parallel "cluster -f {} -m a -g 4 -e 4"
+
+### GET ONLY GC+ALZ CLUSTERING ###
+##################################
 
 
 
@@ -815,6 +1249,60 @@ alz$other$nbOfAdRelevantGenes <- subset(x = alz$alzData$toUseWholeNb, subset = a
 
 
 ### ENRICHR PLAY ###
+
+alz$other$genesOfInterest$clust_enrich <-openxlsx::read.xlsx(xlsxFile = "Tables.xlsx", sheet = "t3_c2", startRow = 10)
+
+alz$other$genesOfInterest$clust_enrich$name <- NULL
+
+purrr::walk2(
+  .x = alz$other$genesOfInterest$clust_enrich, 
+  .y = colnames(alz$other$genesOfInterest$clust_enrich),
+  .f = function(geneList, name){
+    readr::write_tsv(
+      x = as.data.frame( na.exclude(geneList) ), 
+      file = paste0("enrichr/inputs_clusters/cluster_", name, ".txt"),
+      col_names = F)
+    })
+
+
+
+alz$other$genesOfInterest$clust_enrich_out <- purrr::map(
+  .x = list.files(path = "enrichr/outputs_clusters"), 
+  .f = function(file){
+    file_ <- read.delim(file = paste0("enrichr/outputs_clusters/", file), dec = ",")
+    
+    file_ <- dplyr::select(.data = file_, dplyr::everything(), -`Old.P.value`, -`Old.Adjusted.P.value`, -`Odds.Ratio`, -`Combined.Score`)
+    
+    return(file_)
+    })
+names(alz$other$genesOfInterest$clust_enrich_out) <- stringr::str_remove(string = list.files(path = "enrichr/outputs_clusters"), pattern = "_output.tsv")
+names(alz$other$genesOfInterest$clust_enrich_out) <- stringr::str_remove(string = names(alz$other$genesOfInterest$clust_enrich_out), pattern = "cluster_")
+
+alz$other$genesOfInterest$clust_enrich_out <- rlist::list.clean(.data = alz$other$genesOfInterest$clust_enrich_out, fun = function(x) {
+  length(x[[1]]) == 0
+  })
+
+alz$other$genesOfInterest$clust_enrich_out_main <- purrr::map(
+  .x = alz$other$genesOfInterest$clust_enrich_out, 
+  .f = function(dataset){
+    
+    dataset[dataset$Database %in% c("BioCarta_2016", "GO_Biological_Process_2018", "GO_Cellular_Component_2018", "GO_Molecular_Function_2018", "Human_Phenotype_Ontology", "HumanCyc_2016", "Jensen_COMPARTMENTS", "KEGG_2019_Human", "MGI_Mammalian_Phenotype_Level_4_2019", "NCI-Nature_2016", "Panther_2016", "Reactome_2016", "WikiPathways_2019_Human"),]
+  })
+
+alz$other$genesOfInterest$clust_enrich_out_more <- purrr::map(
+  .x = alz$other$genesOfInterest$clust_enrich_out, 
+  .f = function(dataset){
+    
+    dataset[dataset$Database %nin% c("BioCarta_2016", "GO_Biological_Process_2018", "GO_Cellular_Component_2018", "GO_Molecular_Function_2018", "Human_Phenotype_Ontology", "HumanCyc_2016", "Jensen_COMPARTMENTS", "KEGG_2019_Human", "MGI_Mammalian_Phenotype_Level_4_2019", "NCI-Nature_2016", "Panther_2016", "Reactome_2016", "WikiPathways_2019_Human"),]
+  })
+
+openxlsx::write.xlsx(x = alz$other$genesOfInterest$clust_enrich_out_main, file = "clust_enrich_out_main.xlsx")
+openxlsx::write.xlsx(x = alz$other$genesOfInterest$clust_enrich_out_more, file = "clust_enrich_out_more.xlsx")
+
+
+
+
+
 
 alz$other$compareTFs$toUseWholeNb <- read.delim(file = "enrichr/outputs_whole/toUseWholeNb_output.tsv", dec = ",")
 
@@ -974,9 +1462,91 @@ alz$other$clust_vs_wholeGenes <- purrr::map(
 
 
 
+### STRESS GRANULES ###
+
+alz$other$SGs$sgDb <- read.delim(file = "data/stress_granules.tsv")
+
+alz$other$SGs$sgDb$Symbol <- tolower(alz$other$SGs$sgDb$Symbol)
+alz$other$SGs$sgDb$dummy_exp <- 1
+
+alz$other$SGs$desc_dummy <- data.frame("Species" = "homo", "dummy_exp" = 1)
+
+
+alz$other$SGs$ncbi_annotation_of_symbols_to_gene_ids <- master_annotator(
+  descriptions_df = alz$other$SGs$desc_dummy,
+  exp_id_col = "dummy_exp",
+  des_species_col = "Species",
+  input_df = alz$other$SGs$sgDb,
+  input_id_col = 'Symbol',
+  C_legacy_D_str_identifier_type__ = 'Gene name',
+  PERFORM_D_ncbi_annotation = T,
+  A_D_C_string_separator__ = ", ")
+
+alz$other$SGs$input_plus_new_gene_id_from_ncbi_column <- master_annotator(
+  descriptions_df = alz$other$SGs$desc_dummy,
+  exp_id_col ="dummy_exp",
+  des_species_col = "Species",
+  input_df = alz$other$SGs$sgDb,
+  input_id_col = 'Symbol',
+  PERFORM_E_add_new_gene_id_col_originating_from_ncbi = T,
+  E_PERFORM_D_output = alz$other$SGs[['ncbi_annotation_of_symbols_to_gene_ids']],
+  A_D_C_string_separator__ = ", ")
+
+alz$other$SGs$pseudomemoize_external_gene_names_to_gene_id <- master_annotator(
+  descriptions_df = alz$other$SGs$desc_dummy,
+  exp_id_col = 'dummy_exp',
+  des_species_col = "Species",
+  input_df = alz$other$SGs[['ncbi_annotation_of_symbols_to_gene_ids']],
+  input_id_col = 'Gene_ID',
+  A_C_all_Gene_ID_col = 'Gene_ID',
+  PERFORM_A_should_i_prepare_dbs_for_pseudomemoization = T,
+  A_return_qa_of_pseudomemoization = F,
+  A_D_C_string_separator__ = ", ")
+
+alz$other$SGs$annotationsList <- master_annotator(
+  descriptions_df = alz$other$SGs$desc_dummy,
+  exp_id_col = 'dummy_exp',
+  des_species_col = "Species",
+  input_df = alz$other$SGs[['input_plus_new_gene_id_from_ncbi_column']],
+  input_id_col = 'Gene_ID_from_ncbi', ### from probe
+  PERFORM_C_annotation = T,
+  C_legacy_D_str_identifier_type__ = 'Gene_ID',
+  A_C_all_Gene_ID_col = 'Gene_ID_from_ncbi',
+  C_pseudo_memoized_db = alz$other$SGs[['pseudomemoize_external_gene_names_to_gene_id']],
+  A_D_C_string_separator__ = ", ")
+
+alz$other$SGs$annotationsDF <- rlist::list.rbind(alz$other$SGs$annotationsList)
+
+alz$other$SGs$annotationsDF$Symbol1 <- ifelse(
+  test = !is.na(alz$other$SGs$annotationsDF$external_gene_name), 
+  yes = tolower(alz$other$SGs$annotationsDF$external_gene_name), 
+  no = alz$other$SGs$annotationsDF$Symbol)
+
+alz$other$SGs$annotationsDF$Symbol <- purrr::map_chr(.x = alz$other$SGs$annotationsDF$Symbol1, .f = select_best_geneName_wrapper_for_single_string)
+
+alz$other$SGs$annotationsDF <- dplyr::select(.data = alz$other$SGs$annotationsDF, Symbol, stress_g)
+
+alz$other$SGs$output <- merge(x = alz$allFiltered$toUseWholeNb, y = alz$other$SGs$annotationsDF, by = "Symbol")
+
 
 ### OTHER ###
 #############
+
+
+temp <- subset(x = alz[["compData"]][["gc"]], alz[["compData"]][["gc"]]$gc_totalPubs >= 4)
+openxlsx::write.xlsx(x = temp, file = "temp.xlsx")
+
+temp <- subset(alz[["inputAlzData"]][["toUseWhole"]][["spread_work_dataset_3_exps_up"]], select = c("Symbol", "GSE26927__EC", "GSE26972__EC"))
+
+
+temp2 <- biomaRt::useMart("ENSEMBL_MART_ENSEMBL", dataset = "hsapiens_gene_ensembl")
+
+biomaRt::getBM(
+  attributes = c("affy_huex_1_0_st_v2", "external_gene_name"),
+  filters = "affy_huex_1_0_st_v2",
+  values = "2402496",
+  uniqueRows = T,
+  mart = temp2)
 
 
 
